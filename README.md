@@ -1,28 +1,33 @@
-# MPvect_RISC-V
-Vectorización de algoritmos de análisis de series temporales (Matrix profile) en RISC-V.
+# Scalable Vectorization of Time Series Similarity: A Matrix Profile. Implementation on RISC-V and ARM
 
-El repositorio contiene una serie de directorios que contienen lo siguiente:
+This repository implements and benchmarks vectorized versions of Matrix Profile algorithms on vector length agnostic architectures, specifically RISC-V and ARM.
 
-### Algoritmos
+---
 
-Es la carpeta en la que se encuentran los códigos fuente tanto de SCAMP como de SCRIMP, cada uno contiene 4 versiones, que son las siguientes:
+## Repository Structure
 
-    - scamp/scrimp.cpp #Versión base del algoritmo, sin vectorizar.
-    - scamp/scrimp-v.cpp #Versión vectorizada para RISC-V del algoritmo.
-    - scamp/scrimp-v-intel.cpp #Versión vectorizada para arquitecturas X86
-    - scamp/scrimp-vomp.cpp #Versión autovectorizada con openMP con pragma SIMD.
+### 📁 `Algorithms`
 
-Además contiene un Makefile para compilar cada una de las opciones, además de incluir opciones para compilar scamp para ejecutar con qemu (con sus flags específicos) y un archivo de prueba ligero para probar que gem5 funciona correctamente.
+Contains the source code for both **SCAMP** and **SCRIMP** algorithms. Each has four versions:
 
-### Timeseries
+- `scamp/scrimp.cpp`: Base version, no vectorization.
+- `scamp/scrimp-v.cpp`: Vectorized version for RISC-V.
+- `scamp/scrimp-v_no_horizontal.cpp`: Vectorized version without horizontal max.
+- `scamp/scrimp_initial`: Initial version (see Section 4.2 in the paper).
 
-Directorio en el que se almacenan las series temporales para los benchmarks. En el archivo launch.sh vienen todas definidas junto con el tamaño de ventana que precisa cada una.
+Includes a `Makefile` to build all versions, with additional options to compile SCAMP for execution under QEMU (including specific flags).
 
-### Stats
+---
 
-En este directorio se almacenan las estadísticas de gem5, su estructura está definida para guardar cada distribución (determinada por la arquitectura y si es secuencial o vectorizada.) en un directorio distinto. Por tanto, su estructura es la siguiente:
+### 📁 `Timeseries`
 
-<arch> = intel | riscv, <mode> = sec | vect
+Directory containing time series data used for benchmarking. All series and their required window sizes are defined in the `launch.sh` script.
+
+---
+
+### 📁 `Stats`
+
+Execution statistics are saved in the `stats` directory, following this structure:
 
         stats-|
               |
@@ -44,40 +49,58 @@ En este directorio se almacenan las estadísticas de gem5, su estructura está d
                                              |----scrimp-|
                                                          ...
 
-Si la distribución es riscv-vect, dentro del directorio de cada serie temporal, habrá otros 7 directorios, uno por cada valor de vlen con el que se ha probado. Estos se llama scamp/scrimp-v-vlen-{vlen}, y dentro de ellos se encuentra el archivo stats.txt.
+---
 
-### gem5_config_riscv.py
+## Simulation Configuration
 
-Archivo de configuración gem5 para RISC-V, utiliza un procesador risc-vO3, y los parámetros que recibe son los siguientes:
+### ⚙️ `gem5_config_riscv.py`
 
-    Binary: binario del archivo ejecutable junto con sus argumentos.
-    -c o --cores: número de cores que va a tener el procesador. (default=16)
-    -v o --vlen: tamaño del registro vectorial. (default=256)
-    -e o --elen: tamaño del dato con el que se trata. (default=64)
-    --l1i_size: tamaño de la caché l1i. (default=32KiB)
-    --lid_size: tamaño de la caché l1d. (default=64KiB)
-    --l2_size: tamaño de la caché l2. (default=256KiB)
-    --l3_size: tamaño de la caché l3. (default=16MiB)
+Configuration script for **RISC-V** simulation using a `riscvO3` processor. Parameters:
 
-### gem5_config_x86.py
+- `Binary`: Path to the executable with its arguments  
+- `-c`, `--cores`: Number of cores (default: 16)  
+- `-v`, `--vlen`: Vector register length (default: 256)  
+- `-e`, `--elen`: Element width (default: 64)  
+- `--l1i_size`: L1 instruction cache size (default: 32KiB)  
+- `--lid_size`: L1 data cache size (default: 64KiB)  
+- `--l2_size`: L2 cache size (default: 256KiB)  
+- `--l3_size`: L3 cache size (default: 16MiB)  
 
-Igual que el archivo de configuración de RISC-V pero para X86. Los parámetros son los siguientes:
+---
 
+### ⚙️ `gem5_config_arm.py`
 
-    Binary: binario del archivo ejecutable junto con sus argumentos.
-    -c o --cores: número de cores que va a tener el procesador. (default=16)
-    --l1i_size: tamaño de la caché l1i. (default=32KiB)
-    --lid_size: tamaño de la caché l1d. (default=64KiB)
-    --l2_size: tamaño de la caché l2. (default=256KiB)
-    --l3_size: tamaño de la caché l3. (default=16MiB)
+Same as the RISC-V configuration but for **ARM** architecture. Parameters:
 
-### launch.sh
+- `Binary`: Path to the executable with its arguments  
+- `-c`, `--cores`: Number of cores (default: 16)  
+- `--l1i_size`: L1 instruction cache size (default: 32KiB)  
+- `--lid_size`: L1 data cache size (default: 64KiB)  
+- `--l2_size`: L2 cache size (default: 256KiB)  
+- `--l3_size`: L3 cache size (default: 16MiB)  
 
-Archivo que despliega las simulaciones de scamp. Este archivo despliega la simulación que le digas según la arquitectura (intel o riscv), el modo (sec, vect u omp), algoritmo (scamp o scrimp) y el número de threads, todos pasados como argumento. Los modos secuenciales y el modo vectorizado en X86 lanzan 6 simulaciones, ya que hay 6 series temporales con las que hacer las pruebas. En cambio, RISC-V Vectorizado lanza 42 simulaciones, ya que cada serie temporal prueba con 7 vlens distintos.
+---
 
-### generate_graphics.py
+## Execution & Visualization
 
-Archivo que genera gráficas a raíz de las estadísticas recogidas por gem5. Este coge las estadísticas del directorio stats, y crea gráficas a partir de ellos. Hay dos tipos de gráficas a generar:
+### 🚀 `launch.sh`
 
-- Vlen: son gráficas que estudian la evolución del speedup con las distintas distribuciones de vlen. Es una gráfica de líneas, en la que cada línea corresponde con un valor de vlen. Hay que especificar la carpeta de la que se quieren sacar las estadísticas (dentro de la carpeta stats), mediante el comando --vlen_dir.
-- Comp: es una gráfica de comparación de distribuciones, lo que hace es medir el speedup de dos distribuciones y lo mete en una gráfica de líneas, en la que cada línea es una distribución. Ideal para hacer las gráficas de comparación de rendimiento entre arquitecturas, o entre la versión secuencial y la vectorizada.
+Script to launch SCAMP simulations. Takes the following arguments:
+
+- Architecture: `arm` or `riscv`  
+- Mode: `sec` (sequential) or `vect` (vectorized)  
+- Algorithm: `scamp` or `scrimp`  
+- Threads: number of threads to use  
+
+### 🚀 `run.sh`
+
+Specifies and configure all the required arguments for launch.sh.
+
+### 📊 `generate_graphics.py`
+
+Script that generates plots from the statistics collected in the stats directory.
+
+- `Vlen plots`: line plots showing speedup evolution across different vlen values. Each line corresponds to one architecture. You must specify the folder from which to read the statistics (inside the stats directory).
+- `Threads plots`: Comparison plots in terms of threads for both configurations. It is configured to plot 2k vlen for both configurations and 16k vlen for RISC-V. It measures the speedup of two architectures and plots them as lines, one per each.
+- `Algorithm option`: specifies which algorithm to execute.
+- `--no_vect`: include no vectorized lines in the plot.
