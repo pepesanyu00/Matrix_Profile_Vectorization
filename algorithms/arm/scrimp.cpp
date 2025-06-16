@@ -66,7 +66,7 @@ void preprocess(vector<DTYPE> &tSeries, vector<DTYPE> &means, vector<DTYPE> &dev
 
   means.clear();
   devs.clear();
-  // Cummulate sum
+  // Cumulative sum
   for (ITYPE i = 1; i < tSeriesLength; i++)
   {
     ACumSum[i] = tSeries[i] + ACumSum[i - 1];
@@ -94,7 +94,7 @@ void preprocess(vector<DTYPE> &tSeries, vector<DTYPE> &means, vector<DTYPE> &dev
 void scrimp(vector<DTYPE> &tSeries, vector<ITYPE> &idx, vector<DTYPE> &means, vector<DTYPE> &devs, vector<DTYPE> &profile, vector<ITYPE> &profileIndex)
 {
 
-#pragma omp parallel //proc_bind(spread)
+#pragma omp parallel //proc_bind(spread) // Example of processor binding strategy
   {
     // Suppossing ITYPE as uint32_t (we could index series up to 4G elements), to index profile_tmp we need more bits (uint64_t)
     uint64_t my_offset = omp_get_thread_num() * profileLength;
@@ -102,7 +102,7 @@ void scrimp(vector<DTYPE> &tSeries, vector<ITYPE> &idx, vector<DTYPE> &means, ve
     ITYPE Ndiags = (ITYPE)idx.size()*percent_diags/100;
 
 // Go through diagonals (dynamic)
-#pragma omp for schedule(dynamic)
+#pragma omp for schedule(dynamic) // Dynamic scheduling for the loop
     for (ITYPE ri = 0; ri < Ndiags; ri++)
     {
       // Select a diagonal
@@ -158,7 +158,7 @@ void scrimp(vector<DTYPE> &tSeries, vector<ITYPE> &idx, vector<DTYPE> &means, ve
     DTYPE min_distance;
     ITYPE min_index;
 // Reduction
-#pragma omp for schedule(static)
+#pragma omp for schedule(static) // Static scheduling for the loop
     for (ITYPE colum = 0; colum < profileLength; colum++)
     {
       min_distance = numeric_limits<DTYPE>::infinity();

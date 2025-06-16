@@ -13,7 +13,7 @@
 #include <unistd.h> //For getpid(), used to get the pid to generate a unique filename
 #include <typeinfo> //To obtain type name as string
 #include <array>
-#include <assert.h> //RIC incluyo assert para hacer comprobaciones de invariantes y condiciones
+#include <assert.h> //RIC: Included assert for checking invariants and conditions
 //#include <immintrin.h>
 #include <riscv_vector.h>
 
@@ -27,57 +27,54 @@
 
 #define SHUFFLE_DIAGS true
 #define DTYPE double        /* DATA TYPE */
-#define ITYPE uint64_t /* INDEX TYPE: RIC pongo long long int para que tanto el double como el int sean de 64 bits (facilita la vectorización) */
+#define ITYPE uint64_t /* INDEX TYPE: RIC: Set to long long int so that both double and int are 64 bits (facilitates vectorization) */
 
 /*******************************************************************/ 
 #define VDTYPE vfloat64m1_t
 #define VITYPE vuint64m1_t
 #define VMTYPE vbool64_t
 
-//  Reparten un valor por un registro vectorial
+// Broadcast a value across a vector register
 #define SETZERO_PD(vl) __riscv_vfmv_v_f_f64m1(0.0, vl)
 #define SET1_PD(a, vl) __riscv_vfmv_v_f_f64m1(a, vl)
 #define SET1_EPI(a, vl) __riscv_vmv_v_x_u64m1(a, vl)
-//  Carga los elementos de un registro (float e int)
+// Load elements into a register (float and int)
 #define LOADU_PD(a, vl) __riscv_vle64_v_f64m1(a, vl)
 #define LOADU_SI(a, vl) __riscv_vle64_v_u64m1(a, vl)
 
-// Extrae el primer valor de un registro vectorial y lo pone en un escalar float64_t (get), y viceversa (set), coge un escalar float64_t y lo mete en el primer valor del vector.
+// Extracts the first value of a vector register and puts it into a float64_t scalar (get), and vice versa (set), takes a float64_t scalar and puts it into the first value of the vector.
 #define GETFIRST_PD(a) __riscv_vfmv_f_s_f64m1_f64(a)
 #define SETFIRST_PD(a,vl) __riscv_vfmv_s_f_f64m1(a, vl)
 
-// Extrae el mínimo de un registro vectorial y lo pone en un escalar float64_t, la variable b es el valor inicial del máximo.
+// Extracts the minimum from a vector register and puts it into a float64_t scalar, variable b is the initial maximum value.
 #define REDMIN_PD(a, b, vl) __riscv_vfredmin_vs_f64m1_f64m1(a, b, vl)
 
-// Coge el índice del primer valor verdadero de una máscara, si no hay ningún 1 devuelve -1
+// Gets the index of the first true value in a mask, if there is no 1 it returns -1
 #define GETFIRST_MASK(mask,vl) __riscv_vfirst_m_b64(mask, vl) 
 
-//  Guarda los elementos de un registro (float e int) en memoria. Para las unaligned, RVV no requiere alineación en la mayoría de sus instrucciones
+// Stores elements of a register (float and int) in memory. For unaligned, RVV does not require alignment in most of its instructions
 #define STORE_PD(a, b, vl) __riscv_vse64_v_f64m1(a, b, vl)
 #define STORE_SI(a, b, vl) __riscv_vse64_v_u64m1(a, b, vl)
-//  hace el multiply-add de dos vectores y lo almacena en un tercero
+// Performs multiply-add of two vectors and stores it in a third one
 #define FMADD_PD(a, b, c, vl) __riscv_vfmadd_vv_f64m1(a, b, c, vl)
 #define FMSUB_PD(a,b,c, vl) __riscv_vfmsub_vv_f64m1(a, b, c, vl)
-// suma, resta y multiplicación de dos vectores
+// Sum, subtraction and multiplication of two vectors
 #define SUB_PD(a, b, vl) __riscv_vfsub_vv_f64m1(a, b, vl)
 #define ADD_PD(a, b, vl) __riscv_vfadd_vv_f64m1(a, b, vl)
 #define MUL_PD(a, b, vl) __riscv_vfmul_vv_f64m1(a, b, vl)
 #define DIV_PD(a, b, vl) __riscv_vfdiv_vv_f64m1(a, b, vl)
-// Compara elemento a elemento dos vectores (a mayor que b) y devuelve una máscara con 1 en los elementos que cumplen la condición
+// Compares two vectors element by element (a greater than b) and returns a mask with 1 in the elements that meet the condition
 #define CMP_PD_LT(a, b, vl) __riscv_vmflt_vv_f64m1_b64(a, b, vl)
 #define CMP_PD_EQ(a, b, vl) __riscv_vmfeq_vf_f64m1_b64(a, b, vl)
-// Combina dos operandos usando una máscara
+// Combines two operands using a mask
 #define BLEND_EPI(a, b, mask, vl) __riscv_vmerge_vvm_u64m1(a, b, mask, vl)
 #define BLEND_PD(a, b, mask, vl) __riscv_vmerge_vvm_f64m1(a, b, mask, vl)
-// Guarda elementos de 64 bits en memoria, pero sólo los que cumplen la máscara (PD para punto flotante y EPI para enteros)
+// Stores 64-bit elements in memory, but only those that meet the mask (PD for floating point and EPI for integers)
 #define MASKSTOREU_PD(mask, a, b, vl) __riscv_vse64_v_f64m1_m(mask, a, b, vl)
 #define MASKSTOREU_EPI(mask, a, b, vl) __riscv_vse64_v_u64m1_m(mask, a, b, vl)
 
-
-
-// Macros para creación de arrays
+// Macros for array creation
 #define ARRAY_NEW(_type, _var, _elem) _var = new _type[_elem];
-
 
 #define ARRAY_DEL(_var)      \
   assert(_var != NULL); \
@@ -88,11 +85,9 @@ using namespace std;
 ITYPE numThreads, exclusionZone;
 ITYPE windowSize, tSeriesLength, profileLength, percent_diags;
 
-ITYPE VLMAX = __riscv_vsetvlmax_e64m1();  // Devuelve el máximo número de elementos de 64 bits que entran en el vector
+ITYPE VLMAX = __riscv_vsetvlmax_e64m1();  // Returns the maximum number of 64-bit elements that fit in the vector
 
 // Private structures
-// vector<DTYPE> profile_tmp(profileLength * numThreads);
-// vector<ITYPE> profileIndex_tmp(profileLength * numThreads);
 DTYPE *profile_tmp = NULL;
 ITYPE *profileIndex_tmp = NULL;
 
@@ -108,14 +103,6 @@ void preprocess(DTYPE *tSeries, DTYPE *means,
   ACumSum[0] = tSeries[0];
   ASqCumSum[0] = tSeries[0] * tSeries[0];
 
-  // means.clear();
-  // devs.clear();
-  // RIC No hace falta inicializarlos porque se machacan
-  /*for (ITYPE i = 0; i < profileLength + VLMAX; i++)
-  {
-    means[i] = 0;
-    devs[i] = 0;
-  }*/
 
   // Cummulate sum
   for (ITYPE i = 1; i < tSeriesLength; i++)
@@ -135,10 +122,8 @@ void preprocess(DTYPE *tSeries, DTYPE *means,
 
   for (ITYPE i = 0; i < profileLength; i++)
   {
-    // means.push_back(ASum[i] / windowSize);
     means[i] = (ASum[i] / windowSize);
     ASigmaSq[i] = ASumSq[i] / windowSize - means[i] * means[i];
-    // devs.push_back(sqrt(ASigmaSq[i]));
     devs[i] = sqrt(ASigmaSq[i]);
   }
 
@@ -154,21 +139,19 @@ void scrimp(DTYPE *tSeries, vector<ITYPE> &idx,
             ITYPE *profileIndex)
 {
 
-#pragma omp parallel //proc_bind(spread)
+#pragma omp parallel
   {
     ITYPE my_offset = omp_get_thread_num() * (profileLength);
-    ITYPE vlOuter = VLMAX,vlInner = VLMAX,vlRed = VLMAX;
-    ITYPE Ndiags = (ITYPE)idx.size()*percent_diags/100;
+    ITYPE vlOuter = VLMAX, vlInner = VLMAX, vlRed = VLMAX;
+    ITYPE Ndiags = (ITYPE)idx.size() * percent_diags / 100;
 
-// Go through diagonals (dynamic)
+    // Go through diagonals (dynamic)
 #pragma omp for schedule(dynamic)
     for (ITYPE ri = 0; ri < Ndiags; ri++)
-    //for (ITYPE diag = exclusionZone + 1; diag < profileLength; diag += VLMAX)
     {
       ITYPE diag = idx[ri];
-      vlOuter = min(VLMAX, profileLength - diag); // Ajusto el VL para que no se pase del tamaño del vector
+      vlOuter = min(VLMAX, profileLength - diag); // Adjust VL so it doesn't exceed vector size
       VDTYPE dotProd_v = SETZERO_PD(vlOuter);
-
 
       for (ITYPE j = diag; j < windowSize + diag; j++)
       {
@@ -177,11 +160,9 @@ void scrimp(DTYPE *tSeries, vector<ITYPE> &idx,
         dotProd_v = FMADD_PD(tSeriesj_v, tSeriesMinusDiag_v, dotProd_v, vlOuter);
       }
 
-      // j is the column index, i is the row index of the current distance value in the distance matrix
       ITYPE j = diag;
       ITYPE i = 0;
 
-      // __m256d distance_v = _mm256_setzero_pd();
       VDTYPE distance_v;
       VDTYPE meansj_v = LOADU_PD(&means[j], vlOuter),
              devsj_v = LOADU_PD(&devs[j], vlOuter),
@@ -189,9 +170,6 @@ void scrimp(DTYPE *tSeries, vector<ITYPE> &idx,
              devsi_v = SET1_PD(devs[i], vlOuter);
       VDTYPE windowSize_v = SET1_PD((double)windowSize, vlOuter);
 
-      // Evaluate the distance based on the dot product
-      // DTYPE dotProd = 0;
-      // DTYPE distance = 2 * (windowSize - (dotProd - windowSize * means[j] * means[i]) / (devs[j] * devs[i]));
       VDTYPE prod_devs_v = MUL_PD(devsi_v, devsj_v, vlOuter);
       VDTYPE triple_product_v = MUL_PD(windowSize_v, MUL_PD(meansi_v, meansj_v, vlOuter), vlOuter);
       VDTYPE division_v = DIV_PD(SUB_PD(dotProd_v, triple_product_v, vlOuter), prod_devs_v, vlOuter);
@@ -199,47 +177,33 @@ void scrimp(DTYPE *tSeries, vector<ITYPE> &idx,
 
       DTYPE distance_outer[vlOuter];
       STORE_PD(distance_outer, distance_v, vlOuter);
-      for (ITYPE ii = 0; ii < vlOuter; ii++){
-        if (distance_outer[ii] < profile_tmp[i + my_offset]){
+      for (ITYPE ii = 0; ii < vlOuter; ii++)
+      {
+        if (distance_outer[ii] < profile_tmp[i + my_offset])
+        {
           profile_tmp[i + my_offset] = distance_outer[ii];
           profileIndex_tmp[i + my_offset] = j + ii;
         }
       }
-      //Búsqueda horizontal del máximo
-      // Coge el primer valor del vector resultante al aplicar el mínimo entre el vector de correlación y el profile en la posición i+myoffset
-      // DTYPE corr_max =  GETFIRST_PD(  REDMIN_PD(distance_v, SETFIRST_PD(profile_tmp[i + my_offset], vlOuter), vlOuter));
-
-      // // Comprobamos si el valor de correlación máxima está en el vector de correlaciones
-      // VMTYPE mask = CMP_PD_EQ(distance_v, corr_max,vlOuter);
-      // // Cogemos el primer elemento positivo de la máscara. Devuelve -1 si la máscara está completa a 0.
-      // long index_max = GETFIRST_MASK(mask,vlOuter);
-
-      // if(index_max != -1){
-      //   profile_tmp[i + my_offset] = corr_max;
-      //   profileIndex_tmp[i + my_offset] = j + index_max;      
-      // }
 
       VDTYPE profilej_v = LOADU_PD(&profile_tmp[j + my_offset], vlOuter);
       VMTYPE mask = CMP_PD_LT(distance_v, profilej_v, vlOuter);
       MASKSTOREU_PD(mask, &profile_tmp[j + my_offset], distance_v, vlOuter);
-      MASKSTOREU_EPI(mask, &profileIndex_tmp[j + my_offset],  SET1_EPI(i, vlOuter), vlOuter);
+      MASKSTOREU_EPI(mask, &profileIndex_tmp[j + my_offset], SET1_EPI(i, vlOuter), vlOuter);
 
       i = 1;
       for (ITYPE j = diag + 1; j < profileLength; j++)
       {
-        vlInner = min(VLMAX, profileLength - j); // Ajusto el VL para que no se pase del tamaño del vector
-        // RIC seguimos con que las js son diag y son las que se empaquetan, las ies se replican
+        vlInner = min(VLMAX, profileLength - j); // Adjust VL so it doesn't exceed vector size
         VDTYPE tSeriesj0_v = LOADU_PD(&tSeries[j + windowSize - 1], vlInner),
                tSeriesj1_v = LOADU_PD(&tSeries[j - 1], vlInner),
                tSeriesi0_v = SET1_PD(tSeries[i + windowSize - 1], vlInner),
                tSeriesi1_v = SET1_PD(tSeries[i - 1], vlInner);
 
-        // dotProd += (tSeries[j + windowSize - 1] * tSeries[i + windowSize - 1]) - (tSeries[j - 1] * tSeries[i - 1]);
         dotProd_v = ADD_PD(FMSUB_PD(tSeriesj0_v, tSeriesi0_v,
                                     MUL_PD(tSeriesj1_v, tSeriesi1_v, vlInner), vlInner),
                            dotProd_v, vlInner);
 
-        // distance = 2 * (windowSize - (dotProd - means[j] * means[i] * windowSize) / (devs[j] * devs[i]));
         meansj_v = LOADU_PD(&means[j], vlInner);
         devsj_v = LOADU_PD(&devs[j], vlInner);
         meansi_v = SET1_PD(means[i], vlInner);
@@ -251,24 +215,14 @@ void scrimp(DTYPE *tSeries, vector<ITYPE> &idx,
 
         DTYPE distance_inner[vlInner];
         STORE_PD(distance_inner, distance_v, vlInner);
-        for (ITYPE jj = 0; jj < vlInner; jj++){
-          if (distance_inner[jj] < profile_tmp[i + my_offset]){
+        for (ITYPE jj = 0; jj < vlInner; jj++)
+        {
+          if (distance_inner[jj] < profile_tmp[i + my_offset])
+          {
             profile_tmp[i + my_offset] = distance_inner[jj];
             profileIndex_tmp[i + my_offset] = j + jj;
           }
         }
-
-        // Coge el primer valor del vector resultante al aplicar el máximo entre el vector de correlación y el profile en la posición i+myoffset
-        // DTYPE corr_max =  GETFIRST_PD(  REDMIN_PD(distance_v, SETFIRST_PD(profile_tmp[i + my_offset], vlInner), vlInner));
-        // // Comprobamos si el valor de correlación máxima está en el vector de correlaciones
-        // VMTYPE mask = CMP_PD_EQ(distance_v, corr_max,vlInner);
-        // // Cogemos el primer elemento positivo de la máscara. Devuelve -1 si la máscara está completa a 0.
-        // long index_max = GETFIRST_MASK(mask,vlInner);
-
-        // if(index_max != -1){
-        //   profile_tmp[i + my_offset] = corr_max;
-        //   profileIndex_tmp[i + my_offset] = j + index_max;      
-        // }
 
         profilej_v = LOADU_PD(&profile_tmp[j + my_offset], vlInner);
         mask = CMP_PD_LT(distance_v, profilej_v, vlInner);
@@ -277,17 +231,12 @@ void scrimp(DTYPE *tSeries, vector<ITYPE> &idx,
 
         i++;
       }
+    }
 
-    } //'pragma omp for' places here a barrier unless 'no wait' is specified
-
-    // DTYPE min_distance;
-    // ITYPE min_index;
-// Reduction
 #pragma omp for schedule(static)
     for (ITYPE colum = 0; colum < profileLength; colum += VLMAX)
     {
-      vlRed = min(VLMAX, profileLength - colum); // Ajusto el VL para que no se pase del tamaño del vector
-      // max_corr = -numeric_limits<DTYPE>::infinity();
+      vlRed = min(VLMAX, profileLength - colum); // Adjust VL so it doesn't exceed vector size
       VDTYPE min_dist_v = SET1_PD(numeric_limits<DTYPE>::infinity(), vlRed);
       VITYPE min_indices_v = SET1_EPI(1, vlRed);
       for (ITYPE th = 0; th < numThreads; th++)
@@ -295,24 +244,19 @@ void scrimp(DTYPE *tSeries, vector<ITYPE> &idx,
         VDTYPE profile_tmp_v = LOADU_PD(&profile_tmp[colum + (th * profileLength)], vlRed);
         VITYPE profileIndex_tmp_v = LOADU_SI(&profileIndex_tmp[colum + (th * profileLength)], vlRed);
         VMTYPE mask = CMP_PD_LT(profile_tmp_v, min_dist_v, vlRed);
-        min_indices_v = BLEND_EPI(min_indices_v, profileIndex_tmp_v, mask, vlRed); // Update con máscara de los índices
-        min_dist_v = BLEND_PD(min_dist_v, profile_tmp_v, mask, vlRed);             // Update con máscara de las correlaciones
+        min_indices_v = BLEND_EPI(min_indices_v, profileIndex_tmp_v, mask, vlRed); // Update with mask for indices
+        min_dist_v = BLEND_PD(min_dist_v, profile_tmp_v, mask, vlRed);             // Update with mask for correlations
       }
-      // Los stores sí pueden ser alineados
       STORE_PD(&profile[colum], min_dist_v, vlRed);
       STORE_SI(&profileIndex[colum], min_indices_v, vlRed);
     }
   }
-
-  // delete[] profile_tmp;
-  // delete[] profileIndex_tmp;
 }
 
 int main(int argc, char *argv[])
 {
   try
   {
-    // Creation of time meassure structures
     chrono::steady_clock::time_point tstart, tprogstart, tend;
     chrono::duration<double> telapsed;
 
@@ -326,19 +270,16 @@ int main(int argc, char *argv[])
     numThreads = atoi(argv[3]);
     percent_diags = atoi(argv[4]);
     string outdir = argv[5];
-    // Set the exclusion zone to 0.25
     exclusionZone = (ITYPE)(windowSize * 0.25);
     omp_set_num_threads(numThreads);
 
-    // vector<DTYPE> tSeries;
     string inputfilename = argv[1];
     string alg = argv[0];
     alg = alg.substr(2);
     stringstream tmp;
-    tmp << outdir << alg.substr(alg.rfind('/') +1) << "_" << inputfilename.substr(inputfilename.rfind('/') + 1, inputfilename.size() - 4 - inputfilename.rfind('/') - 1) << "_w" << windowSize << "_t" << numThreads << "_pdiags" << percent_diags << "_" << getpid() << ".csv";
+    tmp << outdir << alg.substr(alg.rfind('/') + 1) << "_" << inputfilename.substr(inputfilename.rfind('/') + 1, inputfilename.size() - 4 - inputfilename.rfind('/') - 1) << "_w" << windowSize << "_t" << numThreads << "_pdiags" << percent_diags << "_" << getpid() << ".csv";
     string outfilename = tmp.str();
 
-    // Display info through console
     cout << endl;
     cout << "############################################################" << endl;
     cout << "///////////////////////// SCRIMP ///////////////////////////" << endl;
@@ -346,36 +287,30 @@ int main(int argc, char *argv[])
     cout << endl;
     cout << "[>>] Reading File: " << inputfilename << "..." << endl;
 
-    /* ------------------------------------------------------------------ */
-    /* Count file lines */
     tstart = chrono::steady_clock::now();
 
     fstream tSeriesFile(inputfilename, ios_base::in);
     tSeriesLength = 0;
     cout << "[>>] Counting lines ... " << endl;
     string line;
-    while (getline(tSeriesFile, line)) // Cuento el número de líneas
+    while (getline(tSeriesFile, line)) // Count the number of lines
       tSeriesLength++;
 
     tend = chrono::steady_clock::now();
     telapsed = tend - tstart;
     cout << "[OK] Lines: " << tSeriesLength << " Time: " << telapsed.count() << "s." << endl;
-    /* ------------------------------------------------------------------ */
-    /* Read time series file */
+
     cout << "[>>] Reading values..." << endl;
     tstart = chrono::steady_clock::now();
     tprogstart = tstart;
-    // fstream tSeriesFile(inputfilename, ios_base::in);
-    tSeriesFile.clear();                // Limpio el stream
-    tSeriesFile.seekg(tSeriesFile.beg); // Y lo reinicio a beginning
+    tSeriesFile.clear();                // Clear the stream
+    tSeriesFile.seekg(tSeriesFile.beg); // And reset it to the beginning
     DTYPE *tSeries = NULL;
     DTYPE tempval, tSeriesMin = numeric_limits<DTYPE>::infinity(),
                    tSeriesMax = -numeric_limits<double>::infinity();
-    // alignas(ALIGN) DTYPE tSeries[tSeriesLength + VLMAX];
-    // tSeries = new (std::align_val_t(ALIGN)) DTYPE[tSeriesLength + VLMAX];
     ARRAY_NEW(DTYPE, tSeries, tSeriesLength);
 
-    // RIC comprobar si el fichero tiene algún NaN y quitarlo
+    // RIC: Check if the file has any NaN and remove it
     for (int i = 0; tSeriesFile >> tempval; i++)
     {
       tSeries[i] = tempval;
@@ -385,9 +320,9 @@ int main(int argc, char *argv[])
         tSeriesMax = tempval;
     }
     tSeriesFile.close();
-    // RIC inicializo los VLMAX sobrantes a NaN, así todas las operaciones que
-    //  se hagan con ellos darán NaN, y no se contabilizarán en los resultados
-    //  finales
+    // RIC: Initialize the remaining VLMAX to NaN, so all operations
+    // done with them will result in NaN, and will not be counted in the
+    // final results
     for (ITYPE i = tSeriesLength; i < tSeriesLength; i++)
       tSeries[i] = numeric_limits<DTYPE>::quiet_NaN();
 
@@ -395,7 +330,6 @@ int main(int argc, char *argv[])
     telapsed = tend - tstart;
     cout << "[OK] Read File Time: " << setprecision(numeric_limits<double>::digits10 + 2) << telapsed.count() << " seconds." << endl;
 
-    // Set Matrix Profile Length
     profileLength = tSeriesLength - windowSize + 1;
     DTYPE *means = NULL, *devs = NULL, *profile = NULL;
     vector<ITYPE> diags;
@@ -405,15 +339,14 @@ int main(int argc, char *argv[])
     ARRAY_NEW(DTYPE, profile, profileLength);
     ARRAY_NEW(ITYPE, profileIndex, profileLength);
 
-    // RIC sumo VLMAX al profileLength
+    // RIC: Add VLMAX to profileLength
     ARRAY_NEW(DTYPE, profile_tmp, profileLength * numThreads);
     ARRAY_NEW(ITYPE, profileIndex_tmp, profileLength * numThreads);
     // Private profile initialization
-    // RIC Pongo + VLMAX para inicializar a infinito los elementos añadidos
+    // RIC: Add + VLMAX to initialize added elements to infinity
     for (ITYPE i = 0; i < (profileLength * numThreads); i++)
       profile_tmp[i] = numeric_limits<DTYPE>::infinity();
 
-    // Display info through console
     cout << endl;
     cout << "------------------------------------------------------------" << endl;
     cout << "************************** INFO ****************************" << endl;
@@ -430,7 +363,6 @@ int main(int argc, char *argv[])
     cout << "------------------------------------------------------------" << endl;
     cout << endl;
 
-
     cout << "[>>] Preprocessing..." << endl;
     tstart = chrono::steady_clock::now();
 
@@ -438,52 +370,44 @@ int main(int argc, char *argv[])
 
     tend = chrono::steady_clock::now();
     telapsed = tend - tstart;
-    cout << "[OK] Preprocessing Time:         " << setprecision(numeric_limits<double>::digits10 + 2) << telapsed.count() << " seconds." << endl;
-    /***********************************************/
-    
-    // Random shuffle the diagonals
+    cout << "[OK] Preprocessing Time: " << setprecision(numeric_limits<double>::digits10 + 2) << telapsed.count() << " seconds." << endl;
+
     diags.clear();
-    // Se salta de VLMAX en VLMAX para evitar overlaping
-    for (ITYPE i = exclusionZone + 1; i < profileLength; i+=VLMAX)
+    // Skip by VLMAX to avoid overlapping
+    for (ITYPE i = exclusionZone + 1; i < profileLength; i += VLMAX)
       diags.push_back(i);
 
-    if (SHUFFLE_DIAGS){
-      //random_device rd;
+    if (SHUFFLE_DIAGS)
+    {
       mt19937 g(0);
       shuffle(diags.begin(), diags.end(), g);
     }
-    /******************** SCRIMP ********************/
+
     cout << "[>>] Executing SCRIMP..." << endl;
     tstart = chrono::steady_clock::now();
 
-    // ROI de Iván
-    #ifdef ENABLE_PARSEC_HOOKS
-      __parsec_roi_begin();
-    #endif
+#ifdef ENABLE_PARSEC_HOOKS
+    __parsec_roi_begin();
+#endif
 
-
-    // Establish begining of ROI
-    #ifdef ENABLE_GEM5_ROI
-    m5_work_begin(0,0);
-    #endif
+#ifdef ENABLE_GEM5_ROI
+    m5_work_begin(0, 0);
+#endif
 
     scrimp(tSeries, diags, means, devs, profile, profileIndex);
 
-    // Establish end of ROI    
-    #ifdef ENABLE_GEM5_ROI
-    m5_work_end(0,0);
-    #endif
-    
-    // ROI de Iván
-    #ifdef ENABLE_PARSEC_HOOKS
-      __parsec_roi_end();
-    #endif
+#ifdef ENABLE_GEM5_ROI
+    m5_work_end(0, 0);
+#endif
+
+#ifdef ENABLE_PARSEC_HOOKS
+    __parsec_roi_end();
+#endif
 
     tend = chrono::steady_clock::now();
     telapsed = tend - tstart;
-    cout << "[OK] SCRIMP Time:             " << setprecision(numeric_limits<DTYPE>::digits10 + 2) << telapsed.count() << " seconds." << endl;
+    cout << "[OK] SCRIMP Time: " << setprecision(numeric_limits<DTYPE>::digits10 + 2) << telapsed.count() << " seconds." << endl;
 
-    // Save profile to file
     cout << "[>>] Saving Profile..." << endl;
     tstart = chrono::steady_clock::now();
 
@@ -509,11 +433,10 @@ int main(int argc, char *argv[])
 
     tend = chrono::steady_clock::now();
     telapsed = tend - tstart;
-    cout << "[OK] Saving Profile Time:       " << setprecision(numeric_limits<DTYPE>::digits10 + 2) << telapsed.count() << " seconds." << endl;
+    cout << "[OK] Saving Profile Time: " << setprecision(numeric_limits<DTYPE>::digits10 + 2) << telapsed.count() << " seconds." << endl;
 
-    // Calculate total time
     telapsed = tend - tprogstart;
-    cout << "[OK] Total Time:              " << setprecision(numeric_limits<DTYPE>::digits10 + 2) << telapsed.count() << " seconds." << endl;
+    cout << "[OK] Total Time: " << setprecision(numeric_limits<DTYPE>::digits10 + 2) << telapsed.count() << " seconds." << endl;
     cout << "[OK] Filename: " << outfilename << endl;
     cout << endl;
   }

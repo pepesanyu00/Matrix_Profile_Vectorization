@@ -10,11 +10,11 @@
 #include <chrono>
 #include <random>
 #include <omp.h>
-#include <unistd.h>      // Para getpid()
-#include <typeinfo>
+#include <unistd.h>      // For getpid()
+#include <typeinfo>      // For typeid().name()
 #include <array>
 #include <cassert>
-#include <arm_sve.h>     // Incluir intrínsecos SVE
+#include <arm_sve.h>     // Include SVE intrinsics
 
 #ifdef ENABLE_PARSEC_HOOKS
 #include <hooks.h>
@@ -28,45 +28,45 @@
 #define DTYPE double              /* DATA TYPE */
 #define ITYPE uint64_t       /* INDEX TYPE */
 
-// Tipos SVE: para double, enteros sin signo de 64 bits y máscaras
+// SVE types: for double, 64-bit unsigned integers, and masks
 #define VDTYPE svfloat64_t
 #define VITYPE svuint64_t
 #define VMTYPE svbool_t
 
 // ================================================================
-// Funciones auxiliares para SVE
+// Auxiliary functions for SVE
 
-// Obtiene el número máximo de elementos de 64 bits que contiene cada registro vectorial
+// Gets the maximum number of 64-bit elements contained in each vector register
 uint64_t VLMAX = svcntd();
 
-// Crea un vector de double con todos los elementos iguales a 0.0
+// Creates a double vector with all elements equal to 0.0
 #define SETZERO_PD() svdup_f64(0.0)
 
-// Crea un vector de double con todos los elementos iguales a "a"
+// Creates a double vector with all elements equal to "a"
 static inline svfloat64_t set1_pd(double a,int vl) {
-  // Vector en el que se guardará el elemento a
+  // Vector where element 'a' will be stored
   VDTYPE inactive = svdup_f64(0.0);
-  // Se crea el vector con valor a y predicado para procesar vl elementos
+  // The vector is created with value 'a' and predicate to process 'vl' elements
   return svdup_f64_m(inactive,svwhilelt_b64(0, vl),a);
 
 }
 #define SET1_PD(a, vl) set1_pd(a,vl)
 
-// Crea un vector de enteros de 64 bits con todos los elementos iguales a "a"
+// Creates a 64-bit integer vector with all elements equal to "a"
 static inline svuint64_t set1_epi(double a, int vl) {
-  // Vector en el que se guardará el elemento a
+  // Vector where element 'a' will be stored
   VITYPE inactive = svdup_u64(0.0);
-  // Se crea el vector con valor a y predicado para procesar vl elementos
+  // The vector is created with value 'a' and predicate to process 'vl' elements
   return svdup_u64_m(inactive,svwhilelt_b64(0, vl),a);
 
 }
 #define SET1_EPI(a, vl) set1_epi(a,vl)
 
-// Extrae el primer valor de un vector SVE de doubles mediante una función inline
+// Extracts the first value of an SVE vector of doubles using an inline function
 static inline double get_first_pd(svfloat64_t vec) {
-    int n = svcntd(); // número de lanes para double
+    int n = svcntd(); // number of lanes for double
     DTYPE tmp[n];
-    // Se almacena el vector completo; usamos la máscara “todos activos”
+    // The complete vector is stored; we use the "all active" mask
     svst1_f64(svptrue_b64(), tmp, vec);
     return tmp[0];
 }
@@ -74,59 +74,59 @@ static inline double get_first_pd(svfloat64_t vec) {
 
 
 
-// Realiza una reducción horizontal de máximo; se combina el vector "a" con un vector duplicado de "b" y se reduce
+// Performs a horizontal maximum reduction; combines vector "a" with a duplicated vector of "b" and reduces
 #define REDMAX_PD(a, b, vl) svmaxv_f64(svwhilelt_b64(0, vl), svmax_f64_m(svwhilelt_b64(0, vl), a, svdup_f64(b)))
 
-// Función auxiliar para extraer el primer índice activo (con valor 1) de una máscara SVE.
-// Debido a que SVE no ofrece una extracción directa de la máscara, se almacena la máscara en un arreglo y se recorre.
+// Auxiliary function to extract the first active index (value 1) from an SVE mask.
+// Since SVE does not offer direct mask extraction, the mask is stored in an array and traversed. (Note: This is an older approach; svbrkb_z and svcntp_b64 are more efficient)
 static inline long get_first_mask(svbool_t mask, int vl) {
     // Simple, direct approach to find first true element
     for (int i = 0; i < vl; i++) {
-        uint64_t is_true = svptest_first(svwhilelt_b64(i, i+1), mask);
+        uint64_t is_true = svptest_first(svwhilelt_b64(i, i+1), mask); // Test if the i-th element is true under the mask
         if (is_true) return i;
     }
     return -1;
 }
 #define GETFIRST_MASK(mask, vl) get_first_mask(mask, vl)
 
-// Carga en un vector SVE de doubles (carga “unalineada”) usando una máscara que activa los "vl" elementos
+// Loads into an SVE vector of doubles (unaligned load) using a mask that activates "vl" elements
 #define LOADU_PD(a, vl) svld1_f64(svwhilelt_b64(0, vl), a)
 
-// Carga en un vector SVE de enteros de 64 bits
+// Loads into an SVE vector of 64-bit integers
 #define LOADU_SI(a, vl) svld1_u64(svwhilelt_b64(0, vl), a)
 
-// Almacena en memoria desde un vector SVE de doubles
+// Stores to memory from an SVE vector of doubles
 #define STORE_PD(a, b, vl) svst1_f64(svwhilelt_b64(0, vl), a, b)
 
-// Almacena en memoria desde un vector SVE de enteros de 64 bits
+// Stores to memory from an SVE vector of 64-bit integers
 #define STORE_SI(a, b, vl) svst1_u64(svwhilelt_b64(0, vl), a, b)
 
-// Realiza la operación fused multiply-add: calcula (a * b + c)
+// Performs the fused multiply-add operation: calculates (a * b + c)
 #define FMADD_PD(a, b, c, vl) svmla_f64_z(svwhilelt_b64(0, vl), c, a, b)
 
-// Suma, resta y multiplicación elemental de dos vectores de doubles
+// Element-wise sum, subtraction, and multiplication of two double vectors
 #define ADD_PD(a, b, vl) svadd_f64_z(svwhilelt_b64(0, vl), a, b)
 #define SUB_PD(a, b, vl) svsub_f64_z(svwhilelt_b64(0, vl), a, b)
 #define MUL_PD(a, b, vl) svmul_f64_z(svwhilelt_b64(0, vl), a, b)
 
-// Compara elemento a elemento dos vectores de doubles: mayor que
+// Element-wise comparison of two double vectors: greater than
 #define CMP_PD_GT(a, b, vl) svcmpgt_f64(svwhilelt_b64(0, vl),a, b)
 
-// Compara elemento a elemento: igualdad con un escalar (se duplica el escalar "b")
+// Element-wise comparison: equality with a scalar (scalar "b" is duplicated)
 #define CMP_PD_EQ(a, b, vl) svcmpeq_f64(svwhilelt_b64(0, vl) ,a, svdup_f64(b))
 
-// Combina dos vectores según una máscara: para enteros
+// Combines two vectors according to a mask: for integers
 #define BLEND_EPI(a, b, mask) svsel(mask, b, a)
-// Combina dos vectores según una máscara: para doubles
+// Combines two vectors according to a mask: for doubles
 #define BLEND_PD(a, b, mask) svsel(mask, b, a)
 
-// Almacena en memoria solo los elementos de un vector de doubles que cumplen la máscara
+// Stores to memory only the elements of a double vector that satisfy the mask
 #define MASKSTOREU_PD(mask, a, b) svst1_f64(mask, a, b)
-// Almacena en memoria solo los elementos de un vector de enteros que cumplen la máscara
+// Stores to memory only the elements of an integer vector that satisfy the mask
 #define MASKSTOREU_EPI(mask, a, b) svst1_u64(mask, a, b)
 
 
-// Macros para creación y liberación de arrays (se usan igual)
+// Macros for array creation and deletion (used the same way)
 #define ARRAY_NEW(_type, _var, _elem) _var = new _type[_elem];
 #define ARRAY_DEL(_var)      \
   assert(_var != NULL);      \
@@ -135,15 +135,15 @@ static inline long get_first_mask(svbool_t mask, int vl) {
 using namespace std;
 
 // ------------------------------------------------------------------
-// Variables globales
+// Global variables
 ITYPE numThreads, exclusionZone, windowSize, tSeriesLength, profileLength, percent_diags;
 
-// Variables temporales privadas (se definen posteriormente en main)
+// Private temporary variables (defined later in main)
 DTYPE *profile_tmp = NULL;
 ITYPE *profileIndex_tmp = NULL;
 
 // ------------------------------------------------------------------
-// Función de preprocesamiento: calcula estadísticas necesarias para SCAMP
+// Preprocessing function: calculates statistics needed for SCAMP
 void preprocess(DTYPE *tSeries, DTYPE *means, DTYPE *norms, DTYPE *df, DTYPE *dg, ITYPE tSeriesLength)
 {
   vector<DTYPE> prefix_sum(tSeriesLength);
@@ -180,20 +180,20 @@ void preprocess(DTYPE *tSeries, DTYPE *means, DTYPE *norms, DTYPE *df, DTYPE *dg
 }
 
 // ------------------------------------------------------------------
-// Función SCAMP: cálculo vectorizado con intrínsecos SVE
+// SCAMP function: vectorized calculation with SVE intrinsics
 void scamp(DTYPE *tSeries, vector<ITYPE> &diags, DTYPE *means, DTYPE *norms, DTYPE *df, DTYPE *dg, DTYPE *profile, ITYPE *profileIndex)
 {
 #pragma omp parallel
   {
     ITYPE my_offset = omp_get_thread_num() * profileLength;
-    int vlOuter = VLMAX, vlInner = VLMAX, vlRed = VLMAX;
+    int vlOuter = VLMAX, vlInner = VLMAX, vlRed = VLMAX; // Vector lengths, initialized to max
     ITYPE Ndiags = (ITYPE)diags.size() * percent_diags / 100;
 
-    // Recorre las diagonales (dinámicamente)
+    // Iterate over diagonals (dynamically scheduled)
 #pragma omp for schedule(dynamic)
     for (ITYPE ri = 0; ri < Ndiags; ri++) {
       ITYPE diag = diags[ri];
-      vlOuter = min((ITYPE)VLMAX, profileLength - diag);
+      vlOuter = min((ITYPE)VLMAX, profileLength - diag); // Effective vector length for outer operations
       VDTYPE covariance_v = SETZERO_PD();
       for (ITYPE i = 0; i < windowSize; i++) {
         VDTYPE tSeriesWinDiag_v = LOADU_PD(&tSeries[diag + i], vlOuter);
@@ -206,16 +206,16 @@ void scamp(DTYPE *tSeries, vector<ITYPE> &diags, DTYPE *means, DTYPE *norms, DTY
       }
 
       ITYPE i = 0;
-      // j se inicializa con diag
+      // j is initialized with diag
       ITYPE j = diag;
       VDTYPE normsi_v = SET1_PD(norms[i], vlOuter);
       VDTYPE normsj_v = LOADU_PD(&norms[j], vlOuter);
       VDTYPE correlation_v = MUL_PD( MUL_PD(covariance_v, normsi_v, vlOuter), normsj_v, vlOuter);
 
-      // // Reducción horizontal: hallar el máximo
+      // // Horizontal reduction: find the maximum
       DTYPE corr_max = REDMAX_PD(correlation_v, profile_tmp[i + my_offset], vlOuter);
-      VMTYPE mask = CMP_PD_EQ(correlation_v, corr_max, vlOuter);
-      long index_max = GETFIRST_MASK(mask, vlOuter);
+      VMTYPE mask = CMP_PD_EQ(correlation_v, corr_max, vlOuter); // Mask for elements equal to max
+      long index_max = GETFIRST_MASK(mask, vlOuter); // Get index of first max
 
       if(index_max != -1) {
         profile_tmp[i + my_offset] = corr_max;
@@ -223,13 +223,13 @@ void scamp(DTYPE *tSeries, vector<ITYPE> &diags, DTYPE *means, DTYPE *norms, DTY
       }
 
       VDTYPE profilej_v = LOADU_PD(&profile_tmp[j + my_offset], vlOuter);
-      mask = CMP_PD_GT(correlation_v, profilej_v, vlOuter);
-      MASKSTOREU_PD(mask, &profile_tmp[j + my_offset], correlation_v);
-      MASKSTOREU_EPI(mask, &profileIndex_tmp[j + my_offset], SET1_EPI(i, vlOuter));
+      mask = CMP_PD_GT(correlation_v, profilej_v, vlOuter); // Compare correlation with existing profile value
+      MASKSTOREU_PD(mask, &profile_tmp[j + my_offset], correlation_v); // Store if greater
+      MASKSTOREU_EPI(mask, &profileIndex_tmp[j + my_offset], SET1_EPI(i, vlOuter)); // Store index if greater
 
       i = 1;
       for (ITYPE j = diag + 1; j < profileLength; j++) {
-        vlInner = min((ITYPE)VLMAX, profileLength - j);
+        vlInner = min((ITYPE)VLMAX, profileLength - j); // Effective vector length for inner operations
         VDTYPE dfj_v = LOADU_PD(&df[j - 1], vlInner);
         VDTYPE dgj_v = LOADU_PD(&dg[j - 1], vlInner);
         VDTYPE dfi_v = SET1_PD(df[i - 1], vlInner);
@@ -242,8 +242,8 @@ void scamp(DTYPE *tSeries, vector<ITYPE> &diags, DTYPE *means, DTYPE *norms, DTY
         correlation_v = MUL_PD( MUL_PD(covariance_v, normsi_v, vlInner), normsj_v, vlInner);
 
          corr_max = REDMAX_PD(correlation_v, profile_tmp[i + my_offset], vlInner);
-         mask = CMP_PD_EQ(correlation_v, corr_max, vlInner);
-         index_max = GETFIRST_MASK(mask, vlInner);
+         mask = CMP_PD_EQ(correlation_v, corr_max, vlInner); // Mask for elements equal to max
+         index_max = GETFIRST_MASK(mask, vlInner); // Get index of first max
          
          if(index_max != -1) {
            profile_tmp[i + my_offset] = corr_max;
@@ -251,35 +251,35 @@ void scamp(DTYPE *tSeries, vector<ITYPE> &diags, DTYPE *means, DTYPE *norms, DTY
          }
 
         profilej_v = LOADU_PD(&profile_tmp[j + my_offset], vlInner);
-        mask = CMP_PD_GT(correlation_v, profilej_v, vlInner);
-        MASKSTOREU_PD(mask, &profile_tmp[j + my_offset], correlation_v);
-        MASKSTOREU_EPI(mask, &profileIndex_tmp[j + my_offset], SET1_EPI(i, vlInner));
+        mask = CMP_PD_GT(correlation_v, profilej_v, vlInner); // Compare correlation with existing profile value
+        MASKSTOREU_PD(mask, &profile_tmp[j + my_offset], correlation_v); // Store if greater
+        MASKSTOREU_EPI(mask, &profileIndex_tmp[j + my_offset], SET1_EPI(i, vlInner)); // Store index if greater
 
         i++;
       }
-    } // Fin de omp for (implícita barrera)
+    } // End of omp for (implicit barrier)
 
-    // Reducción final en paralelo: se recorre la columna en pasos de VLMAX
+    // Final reduction in parallel: iterate over columns in VLMAX steps
 #pragma omp for schedule(static)
     for (ITYPE colum = 0; colum < profileLength; colum += VLMAX) {
-      vlRed = min((ITYPE)VLMAX, profileLength - colum);
+      vlRed = min((ITYPE)VLMAX, profileLength - colum); // Effective vector length for reduction
       VDTYPE max_corr_v = SET1_PD(-numeric_limits<DTYPE>::infinity(), vlRed);
-      VITYPE max_indices_v = SET1_EPI(-1, vlRed);
+      VITYPE max_indices_v = SET1_EPI(-1, vlRed); // Initialize with invalid index
       for (ITYPE th = 0; th < numThreads; th++) {
         VDTYPE profile_tmp_v = LOADU_PD(&profile_tmp[colum + (th * profileLength)], vlRed);
         VITYPE profileIndex_tmp_v = LOADU_SI(&profileIndex_tmp[colum + (th * profileLength)], vlRed);
-        VMTYPE mask = CMP_PD_GT(profile_tmp_v, max_corr_v, vlRed);
-        max_indices_v = BLEND_EPI(max_indices_v, profileIndex_tmp_v, mask);
-        max_corr_v = BLEND_PD(max_corr_v, profile_tmp_v, mask);
+        VMTYPE mask = CMP_PD_GT(profile_tmp_v, max_corr_v, vlRed); // Find max correlation among threads
+        max_indices_v = BLEND_EPI(max_indices_v, profileIndex_tmp_v, mask); // Update index based on max
+        max_corr_v = BLEND_PD(max_corr_v, profile_tmp_v, mask); // Update max correlation
       }
-      STORE_PD(&profile[colum], max_corr_v, vlRed);
-      STORE_SI(&profileIndex[colum], max_indices_v, vlRed);
+      STORE_PD(&profile[colum], max_corr_v, vlRed); // Store final max correlation
+      STORE_SI(&profileIndex[colum], max_indices_v, vlRed); // Store final index
     }
   }
 }
 
 // ------------------------------------------------------------------
-// Función principal
+// Main function
 int main(int argc, char *argv[])
 {
   try {
@@ -401,7 +401,6 @@ int main(int argc, char *argv[])
     __parsec_roi_begin();
 #endif
 
-// Para RISC-V se hace con m5_work_begin 
 #ifdef ENABLE_GEM5_ROI
     m5_checkpoint(0,0);
 #endif

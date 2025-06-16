@@ -102,14 +102,14 @@ void scamp(vector<DTYPE> &tSeries, vector<ITYPE> &diags, vector<DTYPE> &means, v
            vector<DTYPE> &df, vector<DTYPE> &dg, vector<DTYPE> &profile, vector<ITYPE> &profileIndex)
 {
 
-#pragma omp parallel //proc_bind(spread)
+#pragma omp parallel //proc_bind(spread) // Example of processor binding strategy
   {
     uint64_t my_offset = omp_get_thread_num() * profileLength;
     DTYPE covariance, correlation;
-    print_binding_info();
+    print_binding_info(); // Prints thread binding information
     ITYPE Ndiags = (ITYPE)diags.size()*percent_diags/100;
 
-// Go through diagonals (dynamic)
+// Go through diagonals (dynamic scheduling)
 #pragma omp for schedule(dynamic)
     for (ITYPE ri = 0; ri < Ndiags; ri++)
     {
@@ -156,7 +156,7 @@ void scamp(vector<DTYPE> &tSeries, vector<ITYPE> &diags, vector<DTYPE> &means, v
         }
         i++;
       }
-    } //'pragma omp for' places here a barrier unless 'no wait' is specified
+    } //'pragma omp for' places here a barrier unless 'nowait' is specified
 
     DTYPE max_corr;
     ITYPE max_index = 0;
@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
 {
   try
   {
-    // Creation of time meassure structures
+    // Creation of time measure structures
     chrono::steady_clock::time_point tstart, tend;
     chrono::duration<double> telapsed;
 
@@ -297,7 +297,7 @@ int main(int argc, char *argv[])
     cout << "[>>] Executing SCAMP..." << endl;
     tstart = chrono::steady_clock::now();
 
-        // ROI de Iván
+    // ROI for Ivan's framework
     #ifdef ENABLE_PARSEC_HOOKS
       __parsec_roi_begin();
     #endif
@@ -311,12 +311,12 @@ int main(int argc, char *argv[])
 
     scamp(tSeries, diags, means, norms, df, dg, profile, profileIndex);
 
-        // Establish end of ROI    
+    // Establish end of ROI    
     #ifdef ENABLE_GEM5_ROI
     m5_checkpoint(0,0);
     #endif
     
-    // ROI de Iván
+    // ROI for Ivan's framework
     #ifdef ENABLE_PARSEC_HOOKS
       __parsec_roi_end();
     #endif

@@ -1,4 +1,3 @@
-
 """
 This script demonstrates how to run RISC-V vector-enabled binaries in SE mode
 with gem5. It accepts the number of CORES, VLEN, and ELEN as optional
@@ -54,10 +53,10 @@ parser.add_argument("binary", nargs="+", type=str)
 parser.add_argument("-c", "--cores", required=False, type=int, default=64)
 parser.add_argument("-v", "--vlen", required=False, type=int, default=16384)
 parser.add_argument("-e", "--elen", required=False, type=int, default=64)
-parser.add_argument("--l1i_size", help="Tamaño de la cache l1i.", default="32KiB")
-parser.add_argument("--l1d_size", help="Tamaño de la cache l1d", default="64KiB")
-parser.add_argument("--l2_size", help="Tamaño de la cache l2", default="256KiB")
-parser.add_argument("--l3_size", help="Tamaño de la cache l3", default="16MiB")
+parser.add_argument("--l1i_size", help="Size of the l1i cache.", default="32KiB")
+parser.add_argument("--l1d_size", help="Size of the l1d cache.", default="64KiB")
+parser.add_argument("--l2_size", help="Size of the l2 cache.", default="256KiB")
+parser.add_argument("--l3_size", help="Size of the l3 cache.", default="16MiB")
 
 args = parser.parse_args()
 
@@ -70,7 +69,7 @@ cache_hierarchy = ThreeLevelCacheHierarchy(
 
 memory = SingleChannelDDR4_2400(size='32GiB')
 
-# Configuración del procesador con cambio de CPU
+# Processor configuration with CPU change
 processor = BaseCPUProcessor(
     cores = [RVVCore(args.elen, args.vlen, i) for i in range(args.cores)]
 )
@@ -82,26 +81,26 @@ board = RiscvBoard(
     memory=memory,
     cache_hierarchy=cache_hierarchy,
 )
-# Para cambiar el modo timing
+# To change timing mode
 #board.set_mem_mode(MemMode.TIMING)
 
 path, *arguments = args.binary
 binary = BinaryResource(local_path=path)
 board.set_se_binary_workload(binary, arguments= arguments)
 
-# Función para cambiar de CPU en las regiones de interés
+# Function to switch CPU in regions of interest
 def roi_begin_handler():
     print("Taking stats from SCAMP")
-    m5.stats.reset()  # Reinicia las estadísticas del ROI
+    m5.stats.reset()  # Reset ROI statistics
     print("stats have been reset in tick {}!".format(
         simulator.get_current_tick(),
     )
 )
     #simulator.save_checkpoint("checkpoints")
 
-# Función para cambiar de vuelta a Timing al final del ROI
+# Function to switch back to Timing at the end of the ROI
 def roi_end_handler():
-    m5.stats.dump()  # Guarda las estadísticas del ROI
+    m5.stats.dump()  # Save ROI statistics
     print("stats have been dumped in tick {}!".format(
         simulator.get_current_tick(),
     )

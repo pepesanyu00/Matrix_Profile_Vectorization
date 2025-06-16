@@ -66,7 +66,7 @@ void preprocess(vector<DTYPE> &tSeries, vector<DTYPE> &means, vector<DTYPE> &dev
 
   means.clear();
   devs.clear();
-  // Cummulate sum
+  // Cumulative sum
   for (ITYPE i = 1; i < tSeriesLength; i++)
   {
     ACumSum[i] = tSeries[i] + ACumSum[i - 1];
@@ -96,7 +96,7 @@ void scrimp(vector<DTYPE> &tSeries, vector<ITYPE> &idx, vector<DTYPE> &means, ve
 
 #pragma omp parallel //proc_bind(spread)
   {
-    // Suppossing ITYPE as uint32_t (we could index series up to 4G elements), to index profile_tmp we need more bits (uint64_t)
+    // Assuming ITYPE as uint32_t (we could index series up to 4G elements), to index profile_tmp we need more bits (uint64_t)
     uint64_t my_offset = omp_get_thread_num() * profileLength;
     print_binding_info();
     ITYPE Ndiags = (ITYPE)idx.size()*percent_diags/100;
@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
 {
   try
   {
-    // Creation of time meassure structures
+    // Creation of time measure structures
     chrono::steady_clock::time_point tstart, tprogstart, tend;
     chrono::duration<double> telapsed;
 
@@ -311,7 +311,6 @@ int main(int argc, char *argv[])
     cout << "[>>] Executing SCRIMP..." << endl;
     tstart = chrono::steady_clock::now();
     
-    // ROI de Iván
     #ifdef ENABLE_PARSEC_HOOKS
       __parsec_roi_begin();
     #endif
@@ -329,7 +328,6 @@ int main(int argc, char *argv[])
     m5_work_end(0,0);
     #endif
     
-    // ROI de Iván
     #ifdef ENABLE_PARSEC_HOOKS
       __parsec_roi_end();
     #endif

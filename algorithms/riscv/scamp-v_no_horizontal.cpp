@@ -14,7 +14,7 @@
 #include <unistd.h> //For getpid(), used to get the pid to generate a unique filename
 #include <typeinfo> //To obtain type name as string
 #include <array>
-#include <assert.h> //RIC incluyo assert para hacer comprobaciones de invariantes y condiciones
+#include <assert.h> //Included assert for checking invariants and conditions
 //#include <immintrin.h>
 #include <riscv_vector.h>
 
@@ -36,50 +36,50 @@
 #define VITYPE vuint64m1_t
 #define VMTYPE vbool64_t
 
-//  Reparten un valor por un registro vectorial
+//  Broadcast a value across a vector register
 #define SETZERO_PD(vl) __riscv_vfmv_v_f_f64m1(0.0, vl)
 #define SET1_PD(a, vl) __riscv_vfmv_v_f_f64m1(a, vl)
 #define SET1_EPI(a, vl) __riscv_vmv_v_x_u64m1(a, vl)
 
-// Extrae el primer valor de un registro vectorial y lo pone en un escalar float64_t (get), y viceversa (set), coge un escalar float64_t y lo mete en el primer valor del vector.
+// Extracts the first value of a vector register and puts it into a float64_t scalar (get), and vice versa (set), takes a float64_t scalar and puts it into the first value of the vector.
 #define GETFIRST_PD(a) __riscv_vfmv_f_s_f64m1_f64(a)
 #define SETFIRST_PD(a,vl) __riscv_vfmv_s_f_f64m1(a, vl)
 
-// Extrae el máximo de un registro vectorial y lo pone en un escalar float64_t, la variable b es el valor inicial del máximo.
+// Extracts the maximum from a vector register and puts it into a float64_t scalar, variable b is the initial maximum value.
 #define REDMAX_PD(a, b, vl) __riscv_vfredmax_vs_f64m1_f64m1(a, b, vl)
 
-// Coge el índice del primer valor verdadero de una máscara, si no hay ningún 1 devuelve -1
+// Gets the index of the first true value in a mask, if there is no 1 it returns -1
 #define GETFIRST_MASK(mask,vl) __riscv_vfirst_m_b64(mask, vl) 
 
-//  Carga los elementos de un registro (float e int)
+//  Load elements into a register (float and int)
 #define LOADU_PD(a, vl) __riscv_vle64_v_f64m1(a, vl)
 #define LOADU_SI(a, vl) __riscv_vle64_v_u64m1(a, vl)
 
-//  Guarda los elementos de un registro (float e int) en memoria. Para las unaligned, RVV no requiere alineación en la mayoría de sus instrucciones
+//  Stores elements of a register (float and int) in memory. For unaligned, RVV does not require alignment in most of its instructions
 #define STORE_PD(a, b, vl) __riscv_vse64_v_f64m1(a, b, vl)
 #define STORE_SI(a, b, vl) __riscv_vse64_v_u64m1(a, b, vl)
 
-//  hace el multiply-add de dos vectores y lo almacena en un tercero
+//  Performs multiply-add of two vectors and stores it in a third one
 #define FMADD_PD(a, b, c, vl) __riscv_vfmadd_vv_f64m1(a, b, c, vl)
 
-// suma, resta y multiplicación de dos vectores
+// Sum, subtraction and multiplication of two vectors
 #define SUB_PD(a, b, vl) __riscv_vfsub_vv_f64m1(a, b, vl)
 #define ADD_PD(a, b, vl) __riscv_vfadd_vv_f64m1(a, b, vl)
 #define MUL_PD(a, b, vl) __riscv_vfmul_vv_f64m1(a, b, vl)
 
-// Compara elemento a elemento dos vectores (a mayor que b, y a igual a b) y devuelve una máscara con 1 en los elementos que cumplen la condición
+// Compares two vectors element by element (a greater than b, and a equal to b) and returns a mask with 1 in the elements that meet the condition
 #define CMP_PD_GT(a, b, vl) __riscv_vmfgt_vv_f64m1_b64(a, b, vl)
 #define CMP_PD_EQ(a, b, vl) __riscv_vmfeq_vf_f64m1_b64(a, b, vl)
 
-// Combina dos operandos usando una máscara
+// Combines two operands using a mask
 #define BLEND_EPI(a, b, mask, vl) __riscv_vmerge_vvm_u64m1(a, b, mask, vl)
 #define BLEND_PD(a, b, mask, vl) __riscv_vmerge_vvm_f64m1(a, b, mask, vl)
 
-// Guarda elementos de 64 bits en memoria, pero sólo los que cumplen la máscara (PD para punto flotante y EPI para enteros)
+// Stores 64-bit elements in memory, but only those that meet the mask (PD for floating point and EPI for integers)
 #define MASKSTOREU_PD(mask, a, b, vl) __riscv_vse64_v_f64m1_m(mask, a, b, vl)
 #define MASKSTOREU_EPI(mask, a, b, vl) __riscv_vse64_v_u64m1_m(mask, a, b, vl)
 
-// Macros para creación de arrays
+// Macros for array creation
 #define ARRAY_NEW(_type, _var, _elem) _var = new _type[_elem];
 
 #define ARRAY_DEL(_var)      \
@@ -91,11 +91,10 @@ using namespace std;
 /* ------------------------------------------------------------------ */
 
 ITYPE numThreads, exclusionZone, windowSize, tSeriesLength, profileLength, percent_diags;
-// Número de elementos a procesar en un ciclo de reloj
-uint64_t VLMAX = __riscv_vsetvlmax_e64m1();  // Devuelve el máximo número de elementos de 64 bits que entran en el vector
+// Number of elements to process in one clock cycle
+uint64_t VLMAX = __riscv_vsetvlmax_e64m1();  // Returns the maximum number of 64-bit elements that fit in the vector
 //ITYPE vl = VLMAX;
 // Private structures
-// RIC las pongo alineadas tb
 // vector<DTYPE> profile_tmp(profileLength * numThreads);
 // vector<ITYPE> profileIndex_tmp(profileLength * numThreads);
 DTYPE *profile_tmp = NULL;
@@ -160,33 +159,32 @@ void scamp(DTYPE *tSeries, vector<ITYPE> &diags, DTYPE *means, DTYPE *norms, DTY
 // Go through diagonals (dynamic)
 #pragma omp for schedule(dynamic)
     for (ITYPE ri = 0; ri < Ndiags; ri++)
-    /* Cada iteración lleva VLMAX elementos a la vez con las instrucciones vectoriales*/
+    /* Each iteration carries VLMAX elements simultaneously with vector instructions*/
     {
       ITYPE diag = diags[ri];
-      vlOuter = min(VLMAX, profileLength - diag); // Ajusto el VL para que no se pase del tamaño del vector
-      // covariance = 0; RIC tengo que crear una variable AVX para la covarianza
-      VDTYPE covariance_v = SETZERO_PD(vlOuter); // 4 covarianzas empaquetadas
-      /* En este bucle se realiza el producto vectorial de cada elemento de las ventanas
-         que están en las posiciones diag y 0 (centrado en la media, de ahí el - mean()
-         En nuestro caso, realizaremos el producto vectorial de la [diag, diag+1, diag+2, diag+3]
-         por la 0, en paralelo, vectorizando.
+      vlOuter = min(VLMAX, profileLength - diag); // Adjust VL so it doesn't exceed vector size
+      VDTYPE covariance_v = SETZERO_PD(vlOuter); // 4 packed covariances
+      /* In this loop, the vector product of each element of the windows
+         at positions diag and 0 is performed (centered on the mean, hence - mean()).
+         In our case, we will perform the vector product of [diag, diag+1, diag+2, diag+3]
+         by 0, in parallel, vectorizing.
       */
       VDTYPE meansWinDiag_v = LOADU_PD(&means[diag], vlOuter);
       VDTYPE meansWin0_v = SET1_PD(means[0], vlOuter);
       for (ITYPE i = 0; i < windowSize; i++)
       {
-        //vlWin = min(VLMAX, windowSize - i); // Ajusto el VL para que no se pase del tamaño del vector
+        //vlWin = min(VLMAX, windowSize - i); // Adjust VL so it doesn't exceed vector size
         // covariance += ((tSeries[diag + i] - means[diag]) * (tSeries[i] - means[0]));
         // assert(((uintptr_t)&tSeries[diag + i] & (uintptr_t)(VLEN - 1)) == 0);
-        VDTYPE tSeriesWinDiag_v = LOADU_PD(&tSeries[diag + i], vlOuter); // Los afectados por diag se cargan de 4 en 4
-        VDTYPE tSeriesWin0_v = SET1_PD(tSeries[i], vlOuter); // Los no afectados se replican
+        VDTYPE tSeriesWinDiag_v = LOADU_PD(&tSeries[diag + i], vlOuter); // Those affected by diag are loaded in groups of 4
+        VDTYPE tSeriesWin0_v = SET1_PD(tSeries[i], vlOuter); // Unaffected ones are replicated
         // res = fma(a,b,c) -> res = a*b+c
         covariance_v = FMADD_PD(SUB_PD(tSeriesWinDiag_v, meansWinDiag_v, vlOuter), SUB_PD(tSeriesWin0_v, meansWin0_v, vlOuter), covariance_v, vlOuter);
       }
 
       ITYPE i = 0;
       ITYPE j = diag;
-      // RIC La j es diag en realidad por lo que las normas j se cargan con load y las i con set1
+      // j is actually diag, so j norms are loaded with load and i norms with set1
       // correlation = covariance * norms[i] * norms[j];
       VDTYPE normsi_v = SET1_PD(norms[i], vlOuter);
       VDTYPE normsj_v = LOADU_PD(&norms[j], vlOuter);
@@ -201,18 +199,6 @@ void scamp(DTYPE *tSeries, vector<ITYPE> &diags, DTYPE *means, DTYPE *norms, DTY
           profileIndex_tmp[i + my_offset] = j + ii;
         }
       }
-      // Búsqueda horizontal del máximo
-      // Coge el primer valor del vector resultante al aplicar el máximo entre el vector de correlación y el profile en la posición i+myoffset
-      // DTYPE corr_max =  GETFIRST_PD(  REDMAX_PD(correlation_v, SETFIRST_PD(profile_tmp[i + my_offset], vlOuter), vlOuter));
-      // // Comprobamos si el valor de correlación máxima está en el vector de correlaciones
-      // VMTYPE mask = CMP_PD_EQ(correlation_v, corr_max,vlOuter);
-      // // Cogemos el primer elemento positivo de la máscara. Devuelve -1 si la máscara está completa a 0.
-      // long index_max = GETFIRST_MASK(mask,vlOuter);
-
-      // if(index_max != -1){
-      //   profile_tmp[i + my_offset] = corr_max;
-      //   profileIndex_tmp[i + my_offset] = j + index_max;      
-      // }
 
       VDTYPE profilej_v = LOADU_PD(&profile_tmp[j + my_offset], vlOuter);
       VMTYPE mask = CMP_PD_GT(correlation_v, profilej_v, vlOuter);
@@ -222,26 +208,26 @@ void scamp(DTYPE *tSeries, vector<ITYPE> &diags, DTYPE *means, DTYPE *norms, DTY
       i = 1;
       for (ITYPE j = diag + 1; j < profileLength; j++)
       {
-        vlInner = min(VLMAX, profileLength - j); // Ajusto el VL para que no se pase del tamaño del vector
-        // empieza por i = 0, j = diag y continúa
-        // covariance += (df[i - 1] * dg[j - 1] + df[j - 1] * dg[i - 1]); // paralelizable
-        // RIC seguimos con que las js son diag y son las que se empaquetan, las ies se replican
-        VDTYPE dfj_v = LOADU_PD(&df[j - 1], vlInner); // Los afectados por diag se cargan de 4 en 4
+        vlInner = min(VLMAX, profileLength - j); // Adjust VL so it doesn't exceed vector size
+        // starts with i = 0, j = diag and continues
+        // covariance += (df[i - 1] * dg[j - 1] + df[j - 1] * dg[i - 1]); // parallelizable
+        // continue with js being diag and packed, ies are replicated
+        VDTYPE dfj_v = LOADU_PD(&df[j - 1], vlInner); // Those affected by diag are loaded in groups of 4
         VDTYPE dgj_v = LOADU_PD(&dg[j - 1], vlInner);
-        VDTYPE dfi_v = SET1_PD(df[i - 1], vlInner); // Los no afectados se replican
+        VDTYPE dfi_v = SET1_PD(df[i - 1], vlInner); // Unaffected ones are replicated
         VDTYPE dgi_v = SET1_PD(dg[i - 1], vlInner);
         // res = fma(a,b,c) -> res = a*b+c
         covariance_v = ADD_PD(covariance_v, FMADD_PD(dfi_v, dgj_v, MUL_PD(dfj_v, dgi_v, vlInner), vlInner), vlInner);
 
-        // correlation = covariance * norms[i] * norms[j];                // mas complicado
-        // RIC como antes, lo que va afectado de i se replica y lo que va afectado de j se carga
+        // correlation = covariance * norms[i] * norms[j];                // more complicated
+        // as before, what is affected by i is replicated and what is affected by j is loaded
         normsi_v = SET1_PD(norms[i], vlInner);
         normsj_v = LOADU_PD(&norms[j], vlInner);
         correlation_v = MUL_PD(MUL_PD(covariance_v, normsi_v, vlInner), normsj_v, vlInner);
 
 
         DTYPE correlation_inner[vlInner];
-        STORE_PD(correlation_inner, correlation_v, vlOuter);
+        STORE_PD(correlation_inner, correlation_v, vlInner);
         for (ITYPE jj = 0; jj < vlInner; jj++){
           if (correlation_inner[jj] > profile_tmp[i + my_offset]){
             profile_tmp[i + my_offset] = correlation_inner[jj];
@@ -249,17 +235,6 @@ void scamp(DTYPE *tSeries, vector<ITYPE> &diags, DTYPE *means, DTYPE *norms, DTY
           }
         }
 
-        // Coge el primer valor del vector resultante al aplicar el máximo entre el vector de correlación y el profile en la posición i+myoffset
-        // corr_max =  GETFIRST_PD(  REDMAX_PD(correlation_v, SETFIRST_PD(profile_tmp[i + my_offset], vlInner), vlInner));
-        // // Comprobamos si el valor de correlación máxima está en el vector de correlaciones
-        // mask = CMP_PD_EQ(correlation_v, corr_max,vlInner);
-        // // Cogemos el primer elemento positivo de la máscara. Devuelve -1 si la máscara está completa a 0.
-        // index_max = GETFIRST_MASK(mask,vlInner);
-
-        // if(index_max != -1){
-        //   profile_tmp[i + my_offset] = corr_max;
-        //   profileIndex_tmp[i + my_offset] = j + index_max;      
-        // }
 
 
         profilej_v = LOADU_PD(&profile_tmp[j + my_offset], vlInner);
@@ -271,22 +246,22 @@ void scamp(DTYPE *tSeries, vector<ITYPE> &diags, DTYPE *means, DTYPE *norms, DTY
       }
     } //'pragma omp for' places here a barrier unless 'no wait' is specified
 
-// Reduction. RIC Vectorizo el bucle externo (colum++ por colum+=VLMAX)
+// Reduction. Vectorize the outer loop (colum++ by colum+=VLMAX)
 #pragma omp for schedule(static)
     for (ITYPE colum = 0; colum < profileLength; colum += VLMAX)
     {
       // max_corr = -numeric_limits<DTYPE>::infinity();
-      vlRed = min(VLMAX, profileLength - colum); // Ajusto el VL para que no se pase del tamaño del vector
+      vlRed = min(VLMAX, profileLength - colum); // Adjust VL so it doesn't exceed vector size
       VDTYPE max_corr_v = SET1_PD(-numeric_limits<DTYPE>::infinity(), vlRed);
       VITYPE max_indices_v = SET1_EPI(-1, vlRed);
       for (ITYPE th = 0; th < numThreads; th++)
       {
-        // RIC Como el profileLength puede tener cualquier valor no puedo hacer los load alineados
+        // Since profileLength can have any value, I cannot do aligned loads
         VDTYPE profile_tmp_v = LOADU_PD(&profile_tmp[colum + (th * profileLength)], vlRed);
         VITYPE profileIndex_tmp_v = LOADU_SI(&profileIndex_tmp[colum + (th * profileLength)], vlRed);
         VMTYPE mask = CMP_PD_GT(profile_tmp_v, max_corr_v, vlRed);
-        max_indices_v = BLEND_EPI(max_indices_v, profileIndex_tmp_v, mask, vlRed); // Update con máscara de los índices
-        max_corr_v = BLEND_PD(max_corr_v, profile_tmp_v, mask, vlRed);             // Update con máscara de las correlaciones
+        max_indices_v = BLEND_EPI(max_indices_v, profileIndex_tmp_v, mask, vlRed); // Masked update of indices
+        max_corr_v = BLEND_PD(max_corr_v, profile_tmp_v, mask, vlRed);             // Masked update of correlations
       }
       STORE_PD(&profile[colum], max_corr_v, vlRed);
       STORE_SI(&profileIndex[colum], max_indices_v, vlRed);
@@ -316,13 +291,13 @@ int main(int argc, char *argv[])
     exclusionZone = (ITYPE)(windowSize * 0.25);
     omp_set_num_threads(numThreads);
 
-    // vector<DTYPE> tSeriesV; Usamos arrays
+    // vector<DTYPE> tSeriesV; We use arrays
     string inputfilename = argv[1];
     string alg = argv[0];
     alg = alg.substr(2);
     stringstream tmp;
-    // RIC Ahora permito que la timeseries se introduzca con el directorio
-    // RIC Quito el directorio de la cadena de resultados con rfind('/') y meto el nombre del programa al principio del nombre del fichero de resultados
+    // Now I allow the timeseries to be entered with the directory
+    // I remove the directory from the results string with rfind('/') and put the program name at the beginning of the results file name
     tmp << outdir << alg.substr(alg.rfind('/') +1) << "_" << inputfilename.substr(inputfilename.rfind('/') + 1, inputfilename.size() - 4 - inputfilename.rfind('/') - 1) << "_w" << windowSize << "_t" << numThreads << "_pdiags" << percent_diags << "_" << getpid() << ".csv";
     string outfilename = tmp.str();
 
@@ -342,7 +317,7 @@ int main(int argc, char *argv[])
     tSeriesLength = 0;
     cout << "[>>] Counting lines ... " << endl;
     string line;
-    while (getline(tSeriesFile, line)) // Cuento el número de líneas
+    while (getline(tSeriesFile, line)) // Count the number of lines
       tSeriesLength++;
 
     tend = chrono::steady_clock::now();
@@ -352,13 +327,13 @@ int main(int argc, char *argv[])
     /* Read time series file */
     cout << "[>>] Reading values ... " << endl;
     tstart = chrono::steady_clock::now();
-    DTYPE *tSeries = NULL; // Defino la serie temporal como un puntero a DTYPE
-    // Le sumo a la longitud el VLMAX para que cuando se trabaje en los límites de la serie se cojan elementos reservados (aunque luego no sirvan los cálculos que se hacen con ellos)
+    DTYPE *tSeries = NULL; // Define the time series as a pointer to DTYPE
+    // I add VLMAX to the length so that when working at the limits of the series, reserved elements are taken (although the calculations made with them are not useful later)
     ARRAY_NEW(DTYPE, tSeries, tSeriesLength);
-    tSeriesFile.clear();                // Limpio el stream
-    tSeriesFile.seekg(tSeriesFile.beg); // Y lo reinicio a beginning
+    tSeriesFile.clear();                // Clear the stream
+    tSeriesFile.seekg(tSeriesFile.beg); // And reset it to the beginning
     DTYPE tempval, tSeriesMin = numeric_limits<DTYPE>::infinity(), tSeriesMax = -numeric_limits<double>::infinity();
-    // Comprobar si el fichero tiene algún NaN y quitarlo, porque esto podría fallar
+    // Check if the file has any NaN and remove it, because this could fail
     for (int i = 0; tSeriesFile >> tempval; i++)
     {
       tSeries[i] = tempval;
@@ -374,8 +349,8 @@ int main(int argc, char *argv[])
     // Set Matrix Profile Length
     profileLength = tSeriesLength - windowSize + 1;
 
-    // Defino los arrays con las macros creadas para que salgan alineados (aunque finalmente uso loadu, y probablemente no haga falta usarlas)
-    // Sumo a la longitud VLMAX para que en los límites se trabaje con memoria reservada aunque no se utilicen los datos
+    // Define arrays with the created macros so they are aligned (although I finally use loadu, and it's probably not necessary to use them)
+    // Add VLMAX to the length so that at the limits, reserved memory is used even if the data is not used
     DTYPE *norms = NULL, *means = NULL, *df = NULL, *dg = NULL, *profile = NULL;
     ITYPE *profileIndex = NULL;
     vector<ITYPE> diags;
@@ -385,7 +360,7 @@ int main(int argc, char *argv[])
     ARRAY_NEW(DTYPE, dg, profileLength);
     ARRAY_NEW(DTYPE, profile, profileLength);
     ARRAY_NEW(ITYPE, profileIndex, profileLength);
-    // RIC sumo VLMAX al profileLength
+    // add VLMAX to profileLength
     ARRAY_NEW(DTYPE, profile_tmp, profileLength * numThreads);
     ARRAY_NEW(ITYPE, profileIndex_tmp, profileLength * numThreads);
     // Private profile initialization
@@ -436,7 +411,6 @@ int main(int argc, char *argv[])
     cout << "[>>] Executing SCAMP..." << endl;
     tstart = chrono::steady_clock::now();
 
-    // ROI de Iván
     #ifdef ENABLE_PARSEC_HOOKS
       __parsec_roi_begin();
     #endif
@@ -454,7 +428,6 @@ int main(int argc, char *argv[])
     m5_work_end(0,0);
     #endif
     
-    // ROI de Iván
     #ifdef ENABLE_PARSEC_HOOKS
       __parsec_roi_end();
     #endif
@@ -477,7 +450,7 @@ int main(int argc, char *argv[])
 
     cout << endl;
 
-    // Libero memoria
+    // Free memory
     ARRAY_DEL(tSeries);
     ARRAY_DEL(norms);
     ARRAY_DEL(means);

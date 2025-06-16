@@ -184,7 +184,7 @@ int main(int argc, char *argv[])
 {
   try
   {
-    // Creation of time meassure structures
+    // Creation of time measure structures
     chrono::steady_clock::time_point tstart, tend;
     chrono::duration<double> telapsed;
 
@@ -298,7 +298,7 @@ int main(int argc, char *argv[])
     cout << "[>>] Executing SCAMP..." << endl;
     tstart = chrono::steady_clock::now();
 
-        // ROI de Iván
+
     #ifdef ENABLE_PARSEC_HOOKS
       __parsec_roi_begin();
     #endif
@@ -317,7 +317,6 @@ int main(int argc, char *argv[])
     m5_work_end(0,0);
     #endif
     
-    // ROI de Iván
     #ifdef ENABLE_PARSEC_HOOKS
       __parsec_roi_end();
     #endif
